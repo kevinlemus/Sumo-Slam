@@ -21,7 +21,10 @@ public class Mover : MonoBehaviour
 
     void Update()
     {
-        MovePlayer();
+        if (gameObject.tag != "Dummy")
+        {
+            MovePlayer();
+        }
     }
 
     void PrintInstruction()

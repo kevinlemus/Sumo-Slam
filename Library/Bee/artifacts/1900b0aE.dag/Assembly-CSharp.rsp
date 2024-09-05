@@ -372,7 +372,8 @@
 "Assets/Scripts/DashAndKnockback.cs"
 "Assets/Scripts/Mover.cs"
 "Assets/Scripts/OutOfBounds.cs"
-"Assets/Scripts/ProjectileBehavior.cs"
+"Assets/Scripts/ProjectileCollision.cs"
+"Assets/Scripts/ProjectileReaction.cs"
 "Assets/Scripts/ProjectileShooter.cs"
 -langversion:9.0
 

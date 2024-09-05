@@ -5,33 +5,27 @@ using UnityEngine;
 public class DashAndKnockback : MonoBehaviour
 {
     [Tooltip("Speed of the dash movement")]
-    [SerializeField] float dashSpeed = 20f;
+    [SerializeField] float dashSpeed = 8f;
 
     [Tooltip("Duration of the dash in seconds")]
     [SerializeField] float dashDuration = 0.2f;
 
     [Tooltip("Cooldown time between dashes in seconds")]
-    [SerializeField] float dashCooldown = 2f;
+    [SerializeField] float dashCooldown = 1f;
 
     [Tooltip("Knockback force for regular walking bumps")]
-    [SerializeField] float regularBumpKnockbackForce = 5f;
+    [SerializeField] float regularBumpKnockbackForce = 100f; // Adjusted for proportionality
 
     [Tooltip("Knockback force for dash attacks")]
-    [SerializeField] float dashKnockbackForce = 15f;
+    [SerializeField] float dashKnockbackForce = 200f;
 
     [Tooltip("Knockback force applied to the attacker during a dash")]
-    [SerializeField] float attackerKnockbackForce = 7.5f;
-
-    [Tooltip("Additional knockback force for critical hits")]
-    [SerializeField] float criticalHitKnockbackForce = 5f;
-
-    [Tooltip("Maximum knockback force for food-based knockback")]
-    [SerializeField] float maxFoodKnockbackForce = 25f;
+    [SerializeField] float attackerKnockbackForce = 300f; // Increased for stronger rebound
 
     private bool isDashing = false;
     private bool canDash = true;
     private Rigidbody rb;
-    private int foodCount = 0;
+    private Coroutine disableMovementCoroutine;
 
     void Start()
     {
@@ -40,7 +34,7 @@ public class DashAndKnockback : MonoBehaviour
 
     void Update()
     {
-        if (canDash && !isDashing && Input.GetKeyDown(KeyCode.Space))
+        if (gameObject.tag != "Dummy" && canDash && !isDashing && Input.GetKeyDown(KeyCode.Space))
         {
             StartCoroutine(Dash());
         }
@@ -70,53 +64,54 @@ public class DashAndKnockback : MonoBehaviour
 
     void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.CompareTag("Player"))
+        if (collision.gameObject.CompareTag("Player") || collision.gameObject.CompareTag("Dummy"))
         {
             Vector3 knockbackDirection = (collision.transform.position - transform.position).normalized;
             Rigidbody otherRb = collision.gameObject.GetComponent<Rigidbody>();
 
             if (otherRb != null)
             {
-                float appliedKnockbackForce = isDashing ? dashKnockbackForce : regularBumpKnockbackForce;
-
-                // Apply critical hit knockback if hit from front or back
-                if (isDashing && (Vector3.Dot(knockbackDirection, transform.forward) > 0.8f || Vector3.Dot(knockbackDirection, transform.forward) < -0.8f))
+                // Apply knockback force for regular walking bumps
+                if (!isDashing)
                 {
-                    appliedKnockbackForce += criticalHitKnockbackForce;
+                    rb.AddForce(-knockbackDirection * regularBumpKnockbackForce, ForceMode.Impulse);
                 }
 
-                // Apply food-based knockback
-                appliedKnockbackForce += foodCount * (maxFoodKnockbackForce / 5);
-
-                // Clamp the knockback force to ensure it doesn't exceed the specified value
-                Vector3 knockbackForce = knockbackDirection * appliedKnockbackForce;
-                if (knockbackForce.magnitude > dashKnockbackForce)
-                {
-                    knockbackForce = knockbackForce.normalized * dashKnockbackForce;
-                }
-
-                otherRb.AddForce(knockbackForce, ForceMode.Impulse);
-
-                // Apply knockback to the attacker during a dash, but with a smaller force
+                // Apply knockback force for dash attacks
                 if (isDashing)
                 {
+                    Vector3 knockbackForce = knockbackDirection * dashKnockbackForce;
+                    otherRb.AddForce(knockbackForce, ForceMode.Impulse);
+
+                    // Apply knockback to the attacker during a dash, but with a stronger force
+                    rb.velocity = Vector3.zero; // Stop the dash
                     Vector3 attackerKnockbackForceVector = -knockbackDirection * attackerKnockbackForce;
-                    if (attackerKnockbackForceVector.magnitude > attackerKnockbackForce)
-                    {
-                        attackerKnockbackForceVector = attackerKnockbackForceVector.normalized * attackerKnockbackForce;
-                    }
                     rb.AddForce(attackerKnockbackForceVector, ForceMode.Impulse);
-                }
-                else
-                {
-                    rb.AddForce(-knockbackDirection * appliedKnockbackForce, ForceMode.Impulse);
+
+                    // Ensure the previous coroutine is stopped before starting a new one
+                    if (disableMovementCoroutine != null)
+                    {
+                        StopCoroutine(disableMovementCoroutine);
+                    }
+                    disableMovementCoroutine = StartCoroutine(DisableMovementAfterDash());
                 }
             }
         }
     }
 
-    public void CollectFood()
+    IEnumerator DisableMovementAfterDash()
     {
-        foodCount = Mathf.Clamp(foodCount + 1, 0, 5);
+        float originalDashSpeed = dashSpeed;
+        dashSpeed = 0f; // Disable movement
+        yield return new WaitForSeconds(1f); // Pause duration
+        dashSpeed = originalDashSpeed; // Gradually allow movement again
+        Debug.Log("Dash speed restored: " + dashSpeed);
+
+        // Safeguard to ensure dashSpeed and canDash are restored
+        if (dashSpeed == 0f)
+        {
+            dashSpeed = originalDashSpeed;
+        }
+        canDash = true;
     }
 }

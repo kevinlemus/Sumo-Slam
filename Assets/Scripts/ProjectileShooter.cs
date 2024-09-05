@@ -4,98 +4,66 @@ using UnityEngine;
 
 public class ProjectileShooter : MonoBehaviour
 {
-    [Tooltip("Reference to the Particle System for the projectile")]
     [SerializeField] ParticleSystem projectileParticleSystem;
-
-    [Tooltip("Cooldown time between shots in seconds")]
-    [SerializeField] float shotCooldown = 1f;
-
-    [Tooltip("Speed of the projectile")]
     [SerializeField] float projectileSpeed = 20f;
-
-    [Tooltip("Range for aim assist")]
-    [SerializeField] float aimAssistRange = 5f;
+    [SerializeField] float cooldownTime = 0.5f; // Cooldown duration
+    [SerializeField] float aimAssistRange = 200f; // Range within which aim assist is applied
+    [SerializeField] float aimAssistIntensity = 0.5f; // Intensity of aim assist (0 to 1)
 
     private bool canShoot = true;
 
     void Update()
     {
-        if (Input.GetMouseButtonDown(0) && canShoot) // Left mouse button click
+        if (gameObject.tag != "Dummy" && canShoot && Input.GetButtonDown("Fire1"))
         {
             ShootProjectile();
         }
     }
 
-    void ShootProjectile()
+    public void ShootProjectile()
     {
-        if (projectileParticleSystem != null)
-        {
-            // Calculate the input direction
-            float xValue = Input.GetAxis("Horizontal");
-            float zValue = Input.GetAxis("Vertical");
-            Vector3 inputDirection = new Vector3(xValue, 0, zValue).normalized;
-
-            // Find the nearest target within the aim assist range
-            GameObject nearestTarget = FindNearestTarget();
-            if (nearestTarget != null)
-            {
-                Vector3 targetDirection = (nearestTarget.transform.position - transform.position).normalized;
-                inputDirection = Vector3.Lerp(inputDirection, targetDirection, 0.5f).normalized;
-            }
-
-            if (inputDirection != Vector3.zero)
-            {
-                // Set the direction and speed of the projectile
-                var main = projectileParticleSystem.main;
-                main.startSpeed = projectileSpeed;
-
-                // Create a new particle system shape module and set the direction
-                var shape = projectileParticleSystem.shape;
-                shape.rotation = new Vector3(0, Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg, 0);
-
-                // Set the reference to the player who fired the projectile
-                var collision = projectileParticleSystem.collision;
-                collision.sendCollisionMessages = true;
-
-                // Set the shooter reference in the projectile
-                var projectileBehavior = projectileParticleSystem.GetComponent<ProjectileBehavior>();
-                if (projectileBehavior != null)
-                {
-                    projectileBehavior.SetShooter(gameObject);
-                }
-
-                projectileParticleSystem.Play();
-                StartCoroutine(Cooldown());
-            }
-        }
+        Vector3 shootDirection = GetAimAssistDirection();
+        ParticleSystem.EmitParams emitParams = new ParticleSystem.EmitParams();
+        emitParams.velocity = shootDirection * projectileSpeed;
+        projectileParticleSystem.Emit(emitParams, 1);
+        StartCoroutine(ShootCooldown());
     }
 
-    GameObject FindNearestTarget()
+    Vector3 GetAimAssistDirection()
     {
-        GameObject[] targets = GameObject.FindGameObjectsWithTag("Player");
-        GameObject nearestTarget = null;
-        float minDistance = aimAssistRange;
+        Collider[] hitColliders = Physics.OverlapSphere(transform.position, aimAssistRange);
+        Transform nearestTarget = null;
+        float nearestDistance = Mathf.Infinity;
 
-        foreach (GameObject target in targets)
+        foreach (Collider hitCollider in hitColliders)
         {
-            if (target != gameObject) // Exclude self
+            if (hitCollider.gameObject.CompareTag("Player") || hitCollider.gameObject.CompareTag("Dummy"))
             {
-                float distance = Vector3.Distance(transform.position, target.transform.position);
-                if (distance < minDistance)
+                float distance = Vector3.Distance(transform.position, hitCollider.transform.position);
+                if (distance < nearestDistance)
                 {
-                    minDistance = distance;
-                    nearestTarget = target;
+                    nearestDistance = distance;
+                    nearestTarget = hitCollider.transform;
                 }
             }
         }
 
-        return nearestTarget;
+        if (nearestTarget != null)
+        {
+            Vector3 directionToTarget = (nearestTarget.position - transform.position).normalized;
+            Vector3 adjustedDirection = Vector3.Lerp(transform.forward, directionToTarget, aimAssistIntensity);
+            return adjustedDirection.normalized;
+        }
+        else
+        {
+            return transform.forward;
+        }
     }
 
-    IEnumerator Cooldown()
+    IEnumerator ShootCooldown()
     {
         canShoot = false;
-        yield return new WaitForSeconds(shotCooldown);
+        yield return new WaitForSeconds(cooldownTime);
         canShoot = true;
     }
 }
